@@ -1,0 +1,55 @@
+{
+    "switches": {
+        "Cisco 2960": {
+            "interfaces": [
+    "Fa0/1", "Fa0/2", "Fa0/3", "Fa0/4", "Fa0/5", "Fa0/6", "Fa0/7", "Fa0/8",
+    "Fa0/9", "Fa0/10", "Fa0/11", "Fa0/12", "Fa0/13", "Fa0/14", "Fa0/15", "Fa0/16",
+    "Fa0/17", "Fa0/18", "Fa0/19", "Fa0/20", "Fa0/21", "Fa0/22", "Fa0/23", "Fa0/24"
+],
+            "type": "L2",
+            "description": "Podstawowy przełącznik warstwy 2"
+        },
+        "Cisco 3560": {
+            "interfaces": ["Fa0/1", "Fa0/2", "Gi0/1"],
+            "type": "L3",
+            "description": "Przełącznik warstwy 3 z funkcjami routingu"
+        },
+        "Cisco 3650": {
+            "interfaces": ["Gi1/0/1", "Gi1/0/2", "Te1/1/1"],
+            "type": "L3",
+            "description": "Nowoczesny przełącznik z obsługą 10 Gb/s"
+        },
+        "Cisco 3850": {
+            "interfaces": ["Gi1/0/1", "Gi1/0/2", "Te1/1/1"],
+            "type": "L3",
+            "description": "Zaawansowany przełącznik z wysoką przepustowością"
+        }
+    },
+    "routers": {
+        "Cisco 1841": {
+            "interfaces": ["Fa0/0", "Fa0/1", "Se0/0/0"],
+            "type": "router",
+            "description": "Router dla małych i średnich sieci"
+        },
+        "Cisco 1941": {
+            "interfaces": ["Gi0/0", "Gi0/1", "Se0/0/0"],
+            "type": "router",
+            "description": "Nowsza wersja routera z obsługą GigabitEthernet"
+        },
+        "Cisco 2811": {
+            "interfaces": ["Fa0/0", "Fa0/1", "Se0/0/0"],
+            "type": "router",
+            "description": "Wszechstronny router z możliwością rozbudowy"
+        },
+        "Cisco 2911": {
+            "interfaces": ["Gi0/0", "Gi0/1", "Se0/0/0"],
+            "type": "router",
+            "description": "Router z zaawansowanymi funkcjami bezpieczeństwa"
+        },
+        "Cisco 4321": {
+            "interfaces": ["Gi0/0/0", "Gi0/0/1", "Se0/0/0"],
+            "type": "router",
+            "description": "Nowoczesny router z wysoką wydajnością"
+        }
+    }
+}
