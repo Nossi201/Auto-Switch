@@ -80,7 +80,11 @@ class NewTemplateArea(QtWidgets.QWidget):
                 max_mac_addresses=self.current_form.max_mac_input.value(),
                 violation_action=self.current_form.violation_action_combo.currentText(),
                 voice_vlan=self.current_form.voice_vlan_input.value() if self.current_form.voice_vlan_input.value() > 0 else None,
-                storm_control_broadcast=self.current_form.storm_control_input.value() if self.current_form.storm_control_input.value() > 0 else None,
+                sticky_mac=self.current_form.sticky_mac_checkbox.isChecked(),
+                storm_control_broadcast_min=self.current_form.broadcast_min_input.value() if self.current_form.storm_control_checkbox.isChecked() else None,
+                storm_control_broadcast_max=self.current_form.broadcast_max_input.value() if self.current_form.storm_control_checkbox.isChecked() else None,
+                storm_control_multicast_min=self.current_form.multicast_min_input.value() if self.current_form.storm_control_checkbox.isChecked() else None,
+                storm_control_multicast_max=self.current_form.multicast_max_input.value() if self.current_form.storm_control_checkbox.isChecked() else None,
                 spanning_tree_portfast=self.current_form.portfast_checkbox.isChecked()
             )
 

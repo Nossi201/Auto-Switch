@@ -1,5 +1,4 @@
-# src/forms/TrunkTemplateForm.py
-"""TrunkTemplate form for user input."""
+"""TrunkTemplate form for user input (no interface selection – handled via button click)"""
 
 from PySide6 import QtWidgets
 
@@ -16,7 +15,6 @@ class TrunkTemplateForm(QtWidgets.QWidget):
         """Create form fields for TrunkTemplate."""
         layout = QtWidgets.QFormLayout(self)
 
-        self.interfaces_input = QtWidgets.QLineEdit()
         self.allowed_vlans_input = QtWidgets.QLineEdit()
         self.native_vlan_input = QtWidgets.QSpinBox()
         self.native_vlan_input.setRange(1, 4094)
@@ -29,7 +27,6 @@ class TrunkTemplateForm(QtWidgets.QWidget):
         self.encapsulation_combo = QtWidgets.QComboBox()
         self.encapsulation_combo.addItems(["dot1q", "isl"])
 
-        layout.addRow("Interfaces (comma separated):", self.interfaces_input)
         layout.addRow("Allowed VLANs (comma separated):", self.allowed_vlans_input)
         layout.addRow("Native VLAN:", self.native_vlan_input)
         layout.addRow("Description:", self.description_input)
@@ -41,7 +38,6 @@ class TrunkTemplateForm(QtWidgets.QWidget):
 
     def load_from_instance(self, instance):
         """Fill form fields from TrunkTemplate instance."""
-        self.interfaces_input.setText(",".join(instance.interfaces))
         self.allowed_vlans_input.setText(",".join(str(v) for v in instance.allowed_vlans))
         self.native_vlan_input.setValue(instance.native_vlan)
         self.description_input.setText(instance.description or "")

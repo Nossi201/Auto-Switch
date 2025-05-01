@@ -8,7 +8,8 @@ from typing import List, Dict
 class SwitchTemplate:
     """Template representing a switch's configuration."""
     hostname: str
-    vlan_list: List[Dict[str, str]] = field(default_factory=list)  # {id: "10", name: "Users"}
-    access_templates: List[str] = field(default_factory=list)  # references to AccessTemplate instances
-    trunk_templates: List[str] = field(default_factory=list)  # references to TrunkTemplate instances
-    spanning_tree_mode: str = "pvst"  # pvst, rapid-pvst, mst
+    vlan_list: List[int] = field(default_factory=lambda: [1])  # allowed VLAN IDs
+    spanning_tree_mode: str = "pvst"  # pvst | rapid-pvst | mst
+    manager_vlan_id: int = 1  # management SVI VLAN
+    manager_ip: str = "192.168.1.1"  # IP on the management SVI
+    default_gateway: str = "192.168.1.254"
