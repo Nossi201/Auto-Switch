@@ -1,20 +1,22 @@
 #src/views/ConfigPageAdd/logic/FormProcessor.py
-"""Handles building template instances from filled PySide6 forms."""
+"""Builds template dataclass instances from PySide6 forms.
+
+Extended in the *Trunk Template* branch to persist additional fields introduced
+in the new UI (nonegotiate, dynamic DTP mode, STP PortFast trunk).
+"""
 
 from src.models.templates.AccessTemplate import AccessTemplate
 from src.models.templates.TrunkTemplate import TrunkTemplate
 from src.models.templates.RouterTemplate import RouterTemplate
 from src.models.templates.SwitchTemplate import SwitchTemplate
 
+
 def build_template_instance(form):
-    """
-    Given a form widget, return the filled dataclass instance.
-    Returns None if form type is not supported.
-    """
+    """Return a filled template instance based on the supplied form widget."""
     if form is None:
         return None
 
-    # Access Template
+    # ----------------------------- Access ----------------------------- #
     if hasattr(form, "interfaces_input") and hasattr(form, "vlan_id_input"):
         return AccessTemplate(
             interfaces=[s.strip() for s in form.interfaces_input.text().split(",") if s.strip()],
@@ -32,7 +34,7 @@ def build_template_instance(form):
             spanning_tree_portfast=form.portfast_checkbox.isChecked(),
         )
 
-    # Trunk Template
+    # ------------------------------ Trunk ----------------------------- #
     if hasattr(form, "allowed_vlans_input") and hasattr(form, "native_vlan_input"):
         return TrunkTemplate(
             interfaces=[s.strip() for s in form.interfaces_input.text().split(",") if s.strip()],
@@ -42,16 +44,23 @@ def build_template_instance(form):
             pruning_enabled=form.pruning_checkbox.isChecked(),
             spanning_tree_guard_root=form.stp_guard_checkbox.isChecked(),
             encapsulation=form.encapsulation_combo.currentText(),
+            # --- new fields ---
+            nonegotiate=form.nonegotiate_checkbox.isChecked() if hasattr(form, "nonegotiate_checkbox") else False,
+            dtp_mode=form.dtp_mode_combo.currentText()
+            if hasattr(form, "dtp_mode_combo") and form.dtp_mode_combo.currentText() != "--"
+            else None,
+            spanning_tree_portfast=form.portfast_checkbox.isChecked() if hasattr(form, "portfast_checkbox") else False,
         )
 
-    # Router Template
+    # ------------------------------ Router ---------------------------- #
     if hasattr(form, "interface_name_input") and hasattr(form, "interface_ip_input"):
         iface_name = form.interface_name_input.text().strip()
         iface_ip = form.interface_ip_input.text().strip()
         iface_mask = form.interface_mask_input.text().strip()
         interfaces = (
             {iface_name: {"ip": iface_ip, "mask": iface_mask}}
-            if iface_name and iface_ip and iface_mask else {}
+            if iface_name and iface_ip and iface_mask
+            else {}
         )
         return RouterTemplate(
             hostname=form.hostname_input.text() or "Router",
@@ -60,18 +69,8 @@ def build_template_instance(form):
             static_routes=[],
         )
 
-    # Switch Template
+    # ------------------------------ Switch ---------------------------- #
     if hasattr(form, "vlan_list_input") and hasattr(form, "spanning_tree_mode_combo"):
-        vlan_entries = [
-            {"id": p.split(":")[0].strip(), "name": p.split(":")[1].strip()}
-            for p in form.vlan_list_input.text().split(",") if ":" in p
-        ] if form.vlan_list_input.text().strip() else []
-
-        manager_entries = {
-            int(p.split(":")[0].strip()): p.split(":")[1].strip()
-            for p in form.manager_vlan_input.text().split(",") if ":" in p
-        } if hasattr(form, "manager_vlan_input") and form.manager_vlan_input.text().strip() else {}
-
         return SwitchTemplate(
             hostname=form.hostname_input.text() or "Switch",
             vlan_list=[int(v.strip()) for v in form.vlan_list_input.text().split(",") if v.strip().isdigit()],

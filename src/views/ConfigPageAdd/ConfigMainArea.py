@@ -1,8 +1,10 @@
 #src/views/ConfigPageAdd/ConfigMainArea.py
-"""Main work area on the configuration page (interfaces, info pane, dynamic form).
+"""Main workspace on the configuration page.
 
-Synchronizes AccessTemplate VLANs with SwitchTemplate and logs active instance
-state to console whenever the radio‑button selection changes.
+*FIX 2025-05-01*
+After accepting a brand-new template, every interface contained in the instance
+is now pushed into InterfaceAssignmentManager so that subsequent radio-button
+selections keep the interface list intact.
 """
 
 from __future__ import annotations
@@ -29,15 +31,18 @@ from src.views.ConfigPageAdd.logic.InterfaceHandler import reassign_interface
 from src.views.ConfigPageAdd.logic.TemplateManager import generate_template_name
 from src.views.ConfigPageAdd.logic.Exporter import export_template
 
+
 class ConfigMainArea(QtWidgets.QWidget):
     """Central configuration workspace."""
 
-    def __init__(self, parent: QtWidgets.QWidget | None, device_info: Dict[str, Any] | None) -> None:
+    def __init__(self,
+                 parent: QtWidgets.QWidget | None,
+                 device_info: Dict[str, Any] | None) -> None:
         super().__init__(parent)
         self._device_info: Dict[str, Any] = device_info or {}
         self.current_form: QtWidgets.QWidget | None = None
         self.current_template_type: str = "device"
-        # cache of template instances keyed by radio value ("device", "vlan", custom‑name)
+        # cache of template instances keyed by radio value ("device", "vlan", custom-name)
         self.custom_templates: Dict[str, object] = {}
         self.form_container: QtWidgets.QStackedWidget
 
@@ -79,23 +84,23 @@ class ConfigMainArea(QtWidgets.QWidget):
         self.apply_btn.clicked.connect(self._apply_form_changes)
         root.addWidget(self.apply_btn)
 
-        btn_layout = QtWidgets.QHBoxLayout()
+        btn_box = QtWidgets.QHBoxLayout()
         self.back_btn = QtWidgets.QPushButton("Wstecz")
         self.back_btn.clicked.connect(self._on_back_clicked)
-        btn_layout.addWidget(self.back_btn)
+        btn_box.addWidget(self.back_btn)
 
         self.save_btn = QtWidgets.QPushButton("Zapisz")
         self.save_btn.clicked.connect(self._apply_form_changes)
-        btn_layout.addWidget(self.save_btn)
+        btn_box.addWidget(self.save_btn)
 
         self.export_btn = QtWidgets.QPushButton("Exportuj")
         self.export_btn.clicked.connect(self._on_export_clicked)
-        btn_layout.addWidget(self.export_btn)
+        btn_box.addWidget(self.export_btn)
 
-        root.addLayout(btn_layout)
+        root.addLayout(btn_box)
         root.addStretch(1)
 
-        # start with device form
+        # start with Device form
         self.load_form_by_radio_choice("device")
 
     # ------------------------- navigation -------------------------- #
@@ -110,6 +115,20 @@ class ConfigMainArea(QtWidgets.QWidget):
 
     # ------------------------- apply/save -------------------------- #
     def _apply_form_changes(self) -> None:
+        """
+        Persist the currently displayed form, then:
+
+        1. Store/overwrite the template instance in self.custom_templates.
+        2. If the instance exposes generate_config(), build the CLI:
+              • When saving the SwitchTemplate (device radio) we pass all
+                AccessTemplates first and TrunkTemplates second as nested
+                configs so they appear inside configure terminal.
+              • Otherwise we just call instance.generate_config().
+        3. Dump the CLI to stdout (for logs).
+        4. Copy the CLI block to the system clipboard.
+        5. Show an information dialog.
+        """
+        # --- build instance from the active form ------------------- #
         if self.current_form is None:
             return
 
@@ -117,94 +136,51 @@ class ConfigMainArea(QtWidgets.QWidget):
         if not instance:
             return
 
-        # Jeśli AccessTemplate → dopisz VLAN do SwitchTemplate
+        # --- keep VLAN list coherent on the device template -------- #
         if isinstance(instance, AccessTemplate):
-            switch: object | None = self.custom_templates.get("device")
+            switch = self.custom_templates.get("device")
             if isinstance(switch, SwitchTemplate):
-                vlan_id: int = instance.vlan_id
-                if vlan_id in switch.vlan_list:
-                    QtWidgets.QMessageBox.warning(self, "Błąd", f"VLAN {vlan_id} już istnieje.")
-                    return
-                switch.vlan_list.append(vlan_id)
-                print(f"[DEBUG] Dodano VLAN {vlan_id} do SwitchTemplate")
+                # add the VLAN only if it is not yet on the list
+                if instance.vlan_id not in switch.vlan_list:
+                    switch.vlan_list.append(instance.vlan_id)
 
-        # zapisz / nadpisz bieżącą instancję
+        # --- store / overwrite current template -------------------- #
         self.custom_templates[self.current_template_type] = instance
-        print(f"[DEBUG] Saved instance: {instance}")
+        print(f"[DEBUG] Saved template '{self.current_template_type}'")
 
-    # ---------------------- radio‑switch handler -------------------- #
-    def load_form_by_radio_choice(self, template_type: str) -> None:
-        print(f"[DEBUG] load_form_by_radio_choice({template_type})")
-        self.current_template_type = template_type
-        dev_type = self._device_info.get("device_type", "router").lower()
-
-        # interfejsy przypisane do danego szablonu
-        assigned_ifaces = [
-            iface
-            for iface, tpl in self.interface_manager.interface_map.items()
-            if tpl == template_type
-        ]
-
-        # -------------------------- resolve instance ------------------------- #
-        instance = None
-        form_cls = None
-
-        if template_type == "device":
-            # Użyj istniejącego lub stwórz i ZAPISZ do custom_templates
-            instance = self.custom_templates.get("device")
-            if instance is None:
-                instance = (
-                    SwitchTemplate(hostname="Switch")
-                    if dev_type == "switch"
-                    else RouterTemplate(hostname="Router")
-                )
-                self.custom_templates["device"] = instance  # ważne → późniejsza synchronizacja VLAN
-            form_cls = SwitchTemplateForm if dev_type == "switch" else RouterTemplateForm
-
-        elif template_type == "vlan":
-            instance = self.custom_templates.get("vlan")
-            if instance is None:
-                instance = AccessTemplate(interfaces=assigned_ifaces)
-                self.custom_templates["vlan"] = instance
+        # --- generate CLI if supported ----------------------------- #
+        if hasattr(instance, "generate_config"):
+            # collect child templates when saving the switch
+            if isinstance(instance, SwitchTemplate):
+                access_templates = [
+                    t for k, t in self.custom_templates.items()
+                    if k != "device" and isinstance(t, AccessTemplate)
+                ]
+                trunk_templates = [
+                    t for k, t in self.custom_templates.items()
+                    if k != "device" and isinstance(t, TrunkTemplate)
+                ]
+                nested = access_templates + trunk_templates
+                cli_lines = instance.generate_config(nested)
             else:
-                if hasattr(instance, "interfaces"):
-                    instance.interfaces = assigned_ifaces
-            form_cls = AccessTemplateForm
+                cli_lines = instance.generate_config()
 
-        elif template_type in self.custom_templates:
-            instance = self.custom_templates[template_type]
-            if hasattr(instance, "interfaces"):
-                instance.interfaces = assigned_ifaces
+            cli_text = "\n".join(cli_lines)
 
-            form_cls = (
-                AccessTemplateForm
-                if isinstance(instance, AccessTemplate)
-                else TrunkTemplateForm
+            # stdout dump
+            print("\n=== Generated CLI for template "
+                  f"'{self.current_template_type}' ===\n{cli_text}\n"
+                  "=== end CLI =====================================\n")
+
+            # clipboard copy
+            QtWidgets.QApplication.clipboard().setText(cli_text)
+
+            # UI feedback
+            QtWidgets.QMessageBox.information(
+                self, "Skopiowano",
+                "Konfiguracja została wygenerowana, skopiowana do schowka "
+                "i wyświetlona w konsoli."
             )
-
-        # -------------------------- guard --------------------------- #
-        if not instance or not form_cls:
-            print(f"[ERROR] Cannot load form for template type: {template_type}")
-            return
-
-        # log instance data
-        print("[DEBUG] Active instance data:")
-        for k, v in asdict(instance).items():
-            print(f"  {k}: {v}")
-
-        # build form and load data
-        form_widget = form_cls()
-        if hasattr(form_widget, "load_from_instance"):
-            form_widget.load_from_instance(instance)
-
-        # replace widget
-        if current := self.form_container.currentWidget():
-            self.form_container.removeWidget(current)
-            current.deleteLater()
-        self.form_container.addWidget(form_widget)
-        self.form_container.setCurrentWidget(form_widget)
-        self.current_form = form_widget
-
     # --------------------- new template creator -------------------- #
     def show_new_template_area(self) -> None:
         from src.views.ConfigPageAdd.NewTemplateArea import NewTemplateArea
@@ -218,15 +194,16 @@ class ConfigMainArea(QtWidgets.QWidget):
         creator.cancel_btn.clicked.connect(self._reload_default_view)
         creator.accept_btn.clicked.connect(self._on_accept_new_template)
 
+    # ---------------------------------------------------------------- #
     def _reload_default_view(self) -> None:
         print("[DEBUG] Reload default view")
         self.load_form_by_radio_choice(self.current_template_type)
 
+    # ---------------------------------------------------------------- #
     def _on_accept_new_template(self) -> None:
-        """Handle accepting a new Access/Trunk template from NewTemplateArea.
-        Performs VLAN‑duplication validation for AccessTemplate before saving.
-        """
+        """Store new template instance and update interface map."""
         print("[DEBUG] Accepting new template")
+
         if not hasattr(self.current_form, "get_full_template_instance"):
             print("[ERROR] Creator missing get_full_template_instance")
             return
@@ -236,28 +213,31 @@ class ConfigMainArea(QtWidgets.QWidget):
             print("[ERROR] Creator returned None")
             return
 
-        # --- Validation for AccessTemplate VLAN duplication ---
+        # --- AccessTemplate VLAN duplication check ------------------ #
         if isinstance(instance, AccessTemplate):
             switch = self.custom_templates.get("device")
             if isinstance(switch, SwitchTemplate):
                 vlan_id = instance.vlan_id
                 if vlan_id in switch.vlan_list:
                     QtWidgets.QMessageBox.warning(
-                        self,
-                        "Błąd",
-                        f"Nie można utworzyć nowego AccessTemplate: VLAN {vlan_id} już istnieje.",
+                        self, "Błąd",
+                        f"Nie można utworzyć AccessTemplate: VLAN {vlan_id} już istnieje."
                     )
-                    print(f"[DEBUG] Aborted – VLAN {vlan_id} already present in SwitchTemplate")
-                    return  # przerwij – nie zapisuj duplikatu
-                # jeśli unikalny, dopisz do listy VLAN‑ów
+                    return
                 switch.vlan_list.append(vlan_id)
-                print(f"[DEBUG] Dodano VLAN {vlan_id} do SwitchTemplate")
+                print(f"[DEBUG] Added VLAN {vlan_id} to SwitchTemplate")
 
-        # --- Save template and add radio button ---
+        # --- Save template ----------------------------------------- #
         name = generate_template_name(instance, list(self.custom_templates.keys()))
         self.custom_templates[name] = instance
-        print(f"[DEBUG] Added custom template '{name}'")
+        print(f"[DEBUG] Added custom template '{name}' with interfaces {instance.interfaces}")
 
+        # --- NEW → register every interface in InterfaceAssignmentManager
+        for iface in getattr(instance, "interfaces", []):
+            if self.interface_manager.assign(iface, name):
+                print(f"[DEBUG] Interface {iface} mapped to template '{name}'")
+
+        # --- add radio button & auto-select ------------------------- #
         sidebar = getattr(self.parent(), "sidebar", None)
         if sidebar and hasattr(sidebar, "add_new_template_radio"):
             sidebar.add_new_template_radio(name)
@@ -265,4 +245,63 @@ class ConfigMainArea(QtWidgets.QWidget):
             if btn:
                 btn.setChecked(True)
 
+        # finally return to normal view
         self._reload_default_view()
+
+    # ---------------------- radio-switch handler -------------------- #
+    def load_form_by_radio_choice(self, template_type: str) -> None:
+        print(f"[DEBUG] load_form_by_radio_choice({template_type})")
+        self.current_template_type = template_type
+        dev_type = self._device_info.get("device_type", "router").lower()
+
+        # interfaces assigned to this template
+        assigned_ifaces = self.interface_manager.get_interfaces_for_template(template_type)
+
+        # ---------- resolve instance + form class ------------------- #
+        instance = None
+        form_cls = None
+
+        if template_type == "device":
+            instance = self.custom_templates.get("device")
+            if instance is None:
+                instance = SwitchTemplate(hostname="Switch") if dev_type == "switch" else RouterTemplate(hostname="Router")
+                self.custom_templates["device"] = instance
+            form_cls = SwitchTemplateForm if dev_type == "switch" else RouterTemplateForm
+
+        elif template_type == "vlan":
+            instance = self.custom_templates.get("vlan")
+            if instance is None:
+                instance = AccessTemplate(interfaces=assigned_ifaces)
+                self.custom_templates["vlan"] = instance
+            else:
+                instance.interfaces = assigned_ifaces
+            form_cls = AccessTemplateForm
+
+        elif template_type in self.custom_templates:
+            instance = self.custom_templates[template_type]
+            if hasattr(instance, "interfaces"):
+                instance.interfaces = assigned_ifaces
+            form_cls = AccessTemplateForm if isinstance(instance, AccessTemplate) else TrunkTemplateForm
+
+        # guard
+        if not instance or not form_cls:
+            print(f"[ERROR] Cannot load form for template type: {template_type}")
+            return
+
+        # build and load form
+        form_widget = form_cls()
+        if hasattr(form_widget, "load_from_instance"):
+            form_widget.load_from_instance(instance)
+
+        # replace widget
+        if current := self.form_container.currentWidget():
+            self.form_container.removeWidget(current)
+            current.deleteLater()
+        self.form_container.addWidget(form_widget)
+        self.form_container.setCurrentWidget(form_widget)
+        self.current_form = form_widget
+
+        # debug dump
+        print("[DEBUG] Active instance data:")
+        for k, v in asdict(instance).items():
+            print(f"  {k}: {v}")
