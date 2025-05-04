@@ -1,7 +1,10 @@
+# 'src/views/ConfigPageAdd/logic/FormProcessor.py'
 """Builds template instances from PySide6 forms.
 
 Access-Template branch extended with every new checkbox / field so that
 no *unexpected-keyword* errors appear.
+
+Updated in 2025-05 to handle new color field for templates.
 """
 from src.models.templates.AccessTemplate import AccessTemplate
 from src.models.templates.TrunkTemplate import TrunkTemplate
@@ -21,11 +24,15 @@ def build_template_instance(form):
 
     # --------------------------- ACCESS --------------------------- #
     if hasattr(form, "interfaces_input") and hasattr(form, "vlan_id_input"):
+        # Get color value if the color picker exists
+        color_value = form.color_picker.get_value() if hasattr(form, "color_picker") else "#4287f5"
+        
         return AccessTemplate(
             # base
             interfaces=[s.strip() for s in form.interfaces_input.text().split(",") if s.strip()],
             vlan_id=form.vlan_id_input.value(),
             description=form.description_input.text() or None,
+            color=color_value,  # Add color field
             voice_vlan=form.voice_vlan_input.value() or None,
 
             # security
@@ -84,12 +91,16 @@ def build_template_instance(form):
         # ---------------- TRUNK ----------------- #
     if hasattr(form, "native_vlan_input"):
         storm_on = _bool(form, "storm_control_checkbox")
+        # Get color value if the color picker exists
+        color_value = form.color_picker.get_value() if hasattr(form, "color_picker") else "#8A2BE2"
+        
         return TrunkTemplate(
             interfaces=[s.strip() for s in form.interfaces_input.text().split(",") if s.strip()],
             allowed_vlans=[int(v.strip()) for v in form.allowed_vlans_input.text().split(",") if
                            v.strip().isdigit()],
             native_vlan=form.native_vlan_input.value(),
             description=form.description_input.text() or None,
+            color=color_value,  # Add color field
 
             # basic flags
             pruning_enabled=_bool(form, "pruning_checkbox"),

@@ -1,10 +1,16 @@
-# src/views/ConfigPageAdd/ConfigSidebar.py
+# 'src/views/ConfigPageAdd/ConfigSidebar.py'
 """Sidebar panel for the configuration page.
 Displays 'New Template' button and dynamically created radio buttons.
+
+Updated in 2025-05:
+* Color support for radio buttons to match template colors
 """
 
-from PySide6 import QtWidgets
+from PySide6 import QtWidgets, QtGui
 from PySide6.QtCore import Signal
+
+from src.utils.color_utils import get_contrasting_text_color
+
 
 class ConfigSidebar(QtWidgets.QFrame):
     """Vertical toolbar docked on the left side of the Config page."""
@@ -44,6 +50,7 @@ class ConfigSidebar(QtWidgets.QFrame):
 
         device_type = self._device_info.get("device_type", "router").lower()
 
+        # Device radio button - default gray color
         self.radio_device = QtWidgets.QRadioButton("Device")
         self.radio_device.setChecked(True)
         self.radio_device.toggled.connect(lambda checked: self._on_radio_changed("device") if checked else None)
@@ -51,8 +58,13 @@ class ConfigSidebar(QtWidgets.QFrame):
         self._radio_buttons = {"device": self.radio_device}
 
         if device_type == "switch":
+            # VLAN 1 radio button - default blue color
             self.radio_vlan1 = QtWidgets.QRadioButton("VLAN 1")
             self.radio_vlan1.toggled.connect(lambda checked: self._on_radio_changed("vlan") if checked else None)
+
+            # Apply default color for VLAN 1 (blue)
+            self._apply_color_to_radio(self.radio_vlan1, "#4287f5")
+
             self.root.addWidget(self.radio_vlan1)
             self._radio_buttons["vlan"] = self.radio_vlan1
 
@@ -67,10 +79,41 @@ class ConfigSidebar(QtWidgets.QFrame):
         if hasattr(self._parent_main.page.main_area, "show_new_template_area"):
             self._parent_main.page.main_area.show_new_template_area()
 
-    def add_new_template_radio(self, name: str):
-        """Add a new radio button for the newly created template."""
+    def _apply_color_to_radio(self, radio_button: QtWidgets.QRadioButton, color: str) -> None:
+        """Apply color styling to a radio button."""
+        if not color:
+            return
+
+        text_color = get_contrasting_text_color(color)
+
+        radio_button.setStyleSheet(f"""
+            QRadioButton {{
+                background-color: {color};
+                color: {text_color};
+                border-radius: 3px;
+                padding: 2px;
+            }}
+            QRadioButton::indicator {{
+                width: 13px;
+                height: 13px;
+                margin-left: 2px;
+            }}
+        """)
+
+    def add_new_template_radio(self, name: str, color: str = None):
+        """
+        Add a new radio button for the newly created template.
+
+        Args:
+            name: Template name
+            color: Template color in hex format (e.g., "#FF0000")
+        """
         radio = QtWidgets.QRadioButton(name)
         radio.toggled.connect(lambda checked, n=name: self._on_radio_changed(n) if checked else None)
+
+        # Apply color styling if provided
+        if color:
+            self._apply_color_to_radio(radio, color)
+
         self.root.insertWidget(self.root.count() - 1, radio)  # Insert before the stretch
         self._radio_buttons[name] = radio
-

@@ -1,3 +1,4 @@
+# 'src/models/templates/AccessTemplate.py'
 """Dataclass for an *access-port* template with full feature-set.
 
 Implements every option requested in issue #42:
@@ -10,6 +11,9 @@ Implements every option requested in issue #42:
 * Speed / Duplex / Auto-MDIX
 * Errdisable timeout
 * DHCP snooping per-port limit, ARP inspection limit
+
+Added in 2025-05:
+* Color for visual identification in the UI
 """
 from dataclasses import dataclass, field
 from typing import List, Optional
@@ -22,6 +26,7 @@ class AccessTemplate:
     interfaces: List[str] = field(default_factory=list)
     vlan_id: int = 1
     description: Optional[str] = None
+    color: str = "#4287f5"  # Default blue color for visual identification
 
     # ---------- port security -------- #
     port_security_enabled: bool = False

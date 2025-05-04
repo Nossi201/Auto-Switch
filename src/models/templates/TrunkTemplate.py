@@ -1,3 +1,4 @@
+# 'src/models/templates/TrunkTemplate.py'
 """Full-featured *trunk-port* template dataclass.
 
 Implements every option available to AccessTemplate, adapted for trunk links:
@@ -9,6 +10,9 @@ Implements every option available to AccessTemplate, adapted for trunk links:
 * EtherChannel (channel-group, mode)
 * Speed / duplex / auto-MDIX
 * Errdisable timeout
+
+Added in 2025-05:
+* Color for visual identification in the UI
 """
 
 from dataclasses import dataclass, field
@@ -21,6 +25,7 @@ class TrunkTemplate:
     # ------------- BASIC ------------- #
     interfaces: List[str] = field(default_factory=list)
     description: Optional[str] = None
+    color: str = "#8A2BE2"  # Default purple color for visual identification
 
     allowed_vlans: List[int] = field(default_factory=list)
     native_vlan: int = 1

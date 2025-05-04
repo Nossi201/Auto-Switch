@@ -1,11 +1,17 @@
+# 'src/forms/AccessTemplateForm.py'
 """PySide6 widget that edits an *access-port template* in three tabs
 (Basic | Security | Advanced).
 
-The tab set is **always visible**, even in “New Template” mode
+The tab set is **always visible**, even in "New Template" mode
 (*editable_interfaces=True*).  All widget attributes keep the historical
 names expected by *FormProcessor*, so no downstream changes are required.
+
+Added in 2025-05:
+* Color picker for visual identification in the UI
 """
-from PySide6 import QtWidgets
+from PySide6 import QtWidgets, QtGui
+
+from src.ui.color_picker import ColorPicker
 
 
 class AccessTemplateForm(QtWidgets.QWidget):
@@ -38,6 +44,10 @@ class AccessTemplateForm(QtWidgets.QWidget):
         self.vlan_id_input.setRange(1, 4094)
 
         self.description_input = QtWidgets.QLineEdit()
+
+        # Add color picker
+        self.color_picker = ColorPicker()
+
         self.voice_vlan_input = QtWidgets.QSpinBox()
         self.voice_vlan_input.setRange(0, 4094)
 
@@ -53,6 +63,7 @@ class AccessTemplateForm(QtWidgets.QWidget):
         b.addRow("Interfaces:", self.interfaces_input)
         b.addRow("VLAN ID:", self.vlan_id_input)
         b.addRow("Description:", self.description_input)
+        b.addRow("Template Color:", self.color_picker)
         b.addRow("Voice VLAN (0 = off):", self.voice_vlan_input)
         b.addRow("PoE inline:", self.poe_inline_input)
         b.addRow("Speed:", self.speed_combo)
@@ -168,6 +179,14 @@ class AccessTemplateForm(QtWidgets.QWidget):
         self.vlan_id_input.setValue(inst.vlan_id)
         self.description_input.setText(inst.description or "")
         self.voice_vlan_input.setValue(inst.voice_vlan or 0)
+
+        # Set color if available
+        if hasattr(inst, 'color'):
+            # Set text to color hex value
+            self.color_picker.current_color = QtGui.QColor(inst.color)
+            self.color_picker.color_button.setText(inst.color.upper())
+            # Apply color to button
+            self.color_picker.update_color_ui()
 
         # basic
         self.poe_inline_input.setText(inst.poe_inline or "")

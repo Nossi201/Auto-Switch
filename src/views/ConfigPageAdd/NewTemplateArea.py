@@ -1,8 +1,10 @@
-#src/views/ConfigPageAdd/NewTemplateArea.py
+# 'src/views/ConfigPageAdd/NewTemplateArea.py'
 """Widget for creating a brand-new Access or Trunk template.
 
 Passes *editable_interfaces=True* to underlying forms so the user can type or
 paste interface names when adding a fresh template.
+
+Updated in 2025-05 to handle new color field for templates.
 """
 
 from PySide6 import QtWidgets
@@ -75,6 +77,7 @@ class NewTemplateArea(QtWidgets.QWidget):
                 ],
                 vlan_id=self.current_form.vlan_id_input.value(),
                 description=self.current_form.description_input.text() or None,
+                color=self.current_form.color_picker.get_value(),  # Get color from picker
                 port_security_enabled=self.current_form.port_security_checkbox.isChecked(),
                 max_mac_addresses=self.current_form.max_mac_input.value(),
                 violation_action=self.current_form.violation_action_combo.currentText(),
@@ -109,6 +112,7 @@ class NewTemplateArea(QtWidgets.QWidget):
                 ],
                 native_vlan=self.current_form.native_vlan_input.value(),
                 description=self.current_form.description_input.text() or None,
+                color=self.current_form.color_picker.get_value(),  # Get color from picker
                 pruning_enabled=self.current_form.pruning_checkbox.isChecked(),
                 spanning_tree_guard_root=self.current_form.stp_guard_checkbox.isChecked(),
                 encapsulation=self.current_form.encapsulation_combo.currentText(),

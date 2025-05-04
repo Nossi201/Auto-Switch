@@ -1,8 +1,14 @@
+# 'src/forms/TrunkTemplateForm.py'
 """PySide6 GUI for TrunkTemplate – three categories (Basic | Security | Advanced).
 
 Keeps legacy attribute names so *FormProcessor* continues to work.
+
+Added in 2025-05:
+* Color picker for visual identification in the UI
 """
-from PySide6 import QtWidgets
+from PySide6 import QtWidgets, QtGui
+
+from src.ui.color_picker import ColorPicker
 
 
 class TrunkTemplateForm(QtWidgets.QWidget):
@@ -35,6 +41,9 @@ class TrunkTemplateForm(QtWidgets.QWidget):
 
         self.description_input = QtWidgets.QLineEdit()
 
+        # Add color picker
+        self.color_picker = ColorPicker()
+
         self.encapsulation_combo = QtWidgets.QComboBox()
         self.encapsulation_combo.addItems(["dot1q", "isl"])
         self.dtp_mode_combo = QtWidgets.QComboBox()
@@ -47,6 +56,7 @@ class TrunkTemplateForm(QtWidgets.QWidget):
         b.addRow("Allowed VLANs:", self.allowed_vlans_input)
         b.addRow("Native VLAN:", self.native_vlan_input)
         b.addRow("Description:", self.description_input)
+        b.addRow("Template Color:", self.color_picker)
         b.addRow("Encapsulation:", self.encapsulation_combo)
         b.addRow("DTP mode:", self.dtp_mode_combo)
         b.addRow(self.nonegotiate_checkbox)
@@ -139,6 +149,14 @@ class TrunkTemplateForm(QtWidgets.QWidget):
         self.allowed_vlans_input.setText(",".join(str(v) for v in inst.allowed_vlans))
         self.native_vlan_input.setValue(inst.native_vlan)
         self.description_input.setText(inst.description or "")
+
+        # Set color if available
+        if hasattr(inst, 'color'):
+            # Set text to color hex value
+            self.color_picker.current_color = QtGui.QColor(inst.color)
+            self.color_picker.color_button.setText(inst.color.upper())
+            # Apply color to button
+            self.color_picker.update_color_ui()
 
         self.pruning_checkbox.setChecked(inst.pruning_enabled)
         self.stp_guard_checkbox.setChecked(inst.spanning_tree_guard_root)

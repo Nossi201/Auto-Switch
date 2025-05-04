@@ -1,10 +1,17 @@
-#src/views/ConfigPageAdd/ConfigMainArea.py
+# 'src/views/ConfigPageAdd/ConfigMainArea.py'
 """Main workspace on the configuration page.
 
 *FIX 2025-05-01*
 After accepting a brand-new template, every interface contained in the instance
 is now pushed into InterfaceAssignmentManager so that subsequent radio-button
 selections keep the interface list intact.
+
+*UPDATE 2025-05-04*
+Added color support for interface buttons and templates. Interface buttons
+are now colored according to the template they belong to.
+
+*UPDATE 2025-05-05*
+Interface buttons now show correct colors immediately upon application start.
 """
 
 from __future__ import annotations
@@ -12,7 +19,7 @@ from __future__ import annotations
 from typing import Any, Dict, List
 from dataclasses import asdict
 
-from PySide6 import QtWidgets
+from PySide6 import QtWidgets, QtGui
 
 from src.models.InterfaceAssignmentManager import InterfaceAssignmentManager
 
@@ -25,6 +32,8 @@ from src.models.templates.AccessTemplate import AccessTemplate
 from src.models.templates.RouterTemplate import RouterTemplate
 from src.models.templates.SwitchTemplate import SwitchTemplate
 from src.models.templates.TrunkTemplate import TrunkTemplate
+
+from src.utils.color_utils import get_contrasting_text_color
 
 from src.views.ConfigPageAdd.logic.FormProcessor import build_template_instance
 from src.views.ConfigPageAdd.logic.InterfaceHandler import reassign_interface
@@ -46,12 +55,37 @@ class ConfigMainArea(QtWidgets.QWidget):
         self.custom_templates: Dict[str, object] = {}
         self.form_container: QtWidgets.QStackedWidget
 
+        # Dictionary to store interface buttons for easy access when updating colors
+        self.interface_buttons: Dict[str, QtWidgets.QPushButton] = {}
+
         self.interface_manager = InterfaceAssignmentManager(
             device_info.get("interfaces", []),
             "vlan" if device_info.get("device_type", "router") == "switch" else "device",
         )
 
+        # Initialize default templates before UI to have them ready for coloring
+        self._init_default_templates()
         self._init_ui()
+
+    # --------------------------- INIT --------------------------- #
+    def _init_default_templates(self) -> None:
+        """Initialize default templates if needed."""
+        dev_type = self._device_info.get("device_type", "router").lower()
+
+        # Initialize device template
+        if "device" not in self.custom_templates:
+            self.custom_templates["device"] = (
+                SwitchTemplate(hostname="Switch") if dev_type == "switch" else RouterTemplate(hostname="Router")
+            )
+
+        # Initialize VLAN 1 template for switches with default color
+        if dev_type == "switch" and "vlan" not in self.custom_templates:
+            vlan_interfaces = self.interface_manager.get_interfaces_for_template("vlan")
+            self.custom_templates["vlan"] = AccessTemplate(
+                interfaces=vlan_interfaces,
+                vlan_id=1,
+                color="#4287f5"  # Default blue color
+            )
 
     # --------------------------- UI INIT --------------------------- #
     def _init_ui(self) -> None:
@@ -71,6 +105,8 @@ class ConfigMainArea(QtWidgets.QWidget):
                     )
                 )
                 grid.addWidget(btn, idx // cols, idx % cols)
+                # Store the button reference for color updates
+                self.interface_buttons[iface] = btn
             root.addLayout(grid)
 
         # form area
@@ -103,6 +139,12 @@ class ConfigMainArea(QtWidgets.QWidget):
         # start with Device form
         self.load_form_by_radio_choice("device")
 
+        # Update interface button colors immediately
+        self._update_interface_button_colors()
+
+        # Make sure sidebar radio colors are initialized
+        self._update_sidebar_radio_colors()
+
     # ------------------------- navigation -------------------------- #
     def _on_back_clicked(self):
         main = self.window()
@@ -112,6 +154,44 @@ class ConfigMainArea(QtWidgets.QWidget):
     def _on_export_clicked(self):
         instance = build_template_instance(self.current_form)
         export_template(instance, self)
+
+    # ------------------------- Color management --------------------- #
+    def _update_interface_button_colors(self) -> None:
+        """Update colors of all interface buttons based on their template assignments."""
+        for iface, btn in self.interface_buttons.items():
+            template_name = self.interface_manager.get_template(iface)
+            template_instance = self.custom_templates.get(template_name)
+
+            if template_instance and hasattr(template_instance, 'color'):
+                # Set button background color based on template color
+                color = template_instance.color
+                text_color = get_contrasting_text_color(color)
+
+                btn.setStyleSheet(f"""
+                    QPushButton {{
+                        background-color: {color};
+                        color: {text_color};
+                        border: 1px solid #555555;
+                        border-radius: 3px;
+                        padding: 4px;
+                    }}
+                    QPushButton:hover {{
+                        border: 1px solid #999999;
+                    }}
+                """)
+            else:
+                # Default style if no template or color
+                btn.setStyleSheet("")
+
+    def _update_sidebar_radio_colors(self) -> None:
+        """Update colors of all radio buttons in the sidebar."""
+        sidebar = getattr(self.parent(), "sidebar", None)
+        if sidebar and hasattr(sidebar, "_radio_buttons"):
+            for template_name, radio_btn in sidebar._radio_buttons.items():
+                if template_name in self.custom_templates:
+                    template = self.custom_templates[template_name]
+                    if hasattr(template, 'color'):
+                        sidebar._apply_color_to_radio(radio_btn, template.color)
 
     # ------------------------- apply/save -------------------------- #
     def _apply_form_changes(self) -> None:
@@ -127,6 +207,7 @@ class ConfigMainArea(QtWidgets.QWidget):
         3. Dump the CLI to stdout (for logs).
         4. Copy the CLI block to the system clipboard.
         5. Show an information dialog.
+        6. Update interface button colors and sidebar radio colors
         """
         # --- build instance from the active form ------------------- #
         if self.current_form is None:
@@ -147,6 +228,12 @@ class ConfigMainArea(QtWidgets.QWidget):
         # --- store / overwrite current template -------------------- #
         self.custom_templates[self.current_template_type] = instance
         print(f"[DEBUG] Saved template '{self.current_template_type}'")
+
+        # --- update interface button colors ------------------------ #
+        self._update_interface_button_colors()
+
+        # --- update sidebar radio colors --------------------------- #
+        self._update_sidebar_radio_colors()
 
         # --- generate CLI if supported ----------------------------- #
         if hasattr(instance, "generate_config"):
@@ -181,6 +268,7 @@ class ConfigMainArea(QtWidgets.QWidget):
                 "Konfiguracja została wygenerowana, skopiowana do schowka "
                 "i wyświetlona w konsoli."
             )
+
     # --------------------- new template creator -------------------- #
     def show_new_template_area(self) -> None:
         from src.views.ConfigPageAdd.NewTemplateArea import NewTemplateArea
@@ -240,10 +328,13 @@ class ConfigMainArea(QtWidgets.QWidget):
         # --- add radio button & auto-select ------------------------- #
         sidebar = getattr(self.parent(), "sidebar", None)
         if sidebar and hasattr(sidebar, "add_new_template_radio"):
-            sidebar.add_new_template_radio(name)
+            sidebar.add_new_template_radio(name, instance.color if hasattr(instance, 'color') else None)
             btn = sidebar._radio_buttons.get(name)
             if btn:
                 btn.setChecked(True)
+
+        # Update interface button colors
+        self._update_interface_button_colors()
 
         # finally return to normal view
         self._reload_default_view()
@@ -264,7 +355,8 @@ class ConfigMainArea(QtWidgets.QWidget):
         if template_type == "device":
             instance = self.custom_templates.get("device")
             if instance is None:
-                instance = SwitchTemplate(hostname="Switch") if dev_type == "switch" else RouterTemplate(hostname="Router")
+                instance = SwitchTemplate(hostname="Switch") if dev_type == "switch" else RouterTemplate(
+                    hostname="Router")
                 self.custom_templates["device"] = instance
             form_cls = SwitchTemplateForm if dev_type == "switch" else RouterTemplateForm
 
@@ -300,6 +392,9 @@ class ConfigMainArea(QtWidgets.QWidget):
         self.form_container.addWidget(form_widget)
         self.form_container.setCurrentWidget(form_widget)
         self.current_form = form_widget
+
+        # Update interface button colors
+        self._update_interface_button_colors()
 
         # debug dump
         print("[DEBUG] Active instance data:")
