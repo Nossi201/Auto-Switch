@@ -1,15 +1,16 @@
-# 'src/views/ConfigPageAdd/NewTemplateArea.py'
+# src/views/ConfigPageAdd/NewTemplateArea.py
 """Widget for creating a brand-new Access or Trunk template.
 
 Passes *editable_interfaces=True* to underlying forms so the user can type or
-paste interface names when adding a fresh template.
-
-Updated in 2025-05 to handle new color field for templates.
+paste interface names when adding a fresh template. The widget supports
+the enhanced forms with all advanced configuration options.
 """
 
 from PySide6 import QtWidgets
 from src.forms.AccessTemplateForm import AccessTemplateForm
 from src.forms.TrunkTemplateForm import TrunkTemplateForm
+from src.models.templates.AccessTemplate import AccessTemplate
+from src.models.templates.TrunkTemplate import TrunkTemplate
 
 
 class NewTemplateArea(QtWidgets.QWidget):
@@ -66,10 +67,20 @@ class NewTemplateArea(QtWidgets.QWidget):
 
     # ------------------------------------------------------------------ #
     def get_full_template_instance(self):
-        """Return a fully populated template object (AccessTemplate/TrunkTemplate)."""
-        from src.models.templates.AccessTemplate import AccessTemplate
-        from src.models.templates.TrunkTemplate import TrunkTemplate
+        """Return a fully populated template object (AccessTemplate/TrunkTemplate).
 
+        This method handles both the original and enhanced forms, checking for
+        the presence of the create_access_template() method to determine which approach to use.
+        """
+        # For enhanced AccessTemplateForm with create_access_template() method
+        if isinstance(self.current_form, AccessTemplateForm) and hasattr(self.current_form, 'create_access_template'):
+            return self.current_form.create_access_template()
+
+        # For enhanced TrunkTemplateForm with similar method (if implemented)
+        if isinstance(self.current_form, TrunkTemplateForm) and hasattr(self.current_form, 'create_trunk_template'):
+            return self.current_form.create_trunk_template()
+
+        # Legacy fallback for original forms
         if isinstance(self.current_form, AccessTemplateForm):
             return AccessTemplate(
                 interfaces=[
@@ -77,7 +88,8 @@ class NewTemplateArea(QtWidgets.QWidget):
                 ],
                 vlan_id=self.current_form.vlan_id_input.value(),
                 description=self.current_form.description_input.text() or None,
-                color=self.current_form.color_picker.get_value(),  # Get color from picker
+                color=self.current_form.color_picker.get_value() if hasattr(self.current_form,
+                                                                            'color_picker') else None,
                 port_security_enabled=self.current_form.port_security_checkbox.isChecked(),
                 max_mac_addresses=self.current_form.max_mac_input.value(),
                 violation_action=self.current_form.violation_action_combo.currentText(),
@@ -97,11 +109,14 @@ class NewTemplateArea(QtWidgets.QWidget):
                 storm_control_multicast_max=self.current_form.multicast_max_input.value()
                 if self.current_form.storm_control_checkbox.isChecked()
                 else None,
-                spanning_tree_portfast=self.current_form.portfast_checkbox.isChecked(),
+                spanning_tree_portfast=self.current_form.spanning_tree_portfast_checkbox.isChecked()
+                if hasattr(self.current_form, "spanning_tree_portfast_checkbox")
+                else False,
             )
 
         if isinstance(self.current_form, TrunkTemplateForm):
-            return TrunkTemplate(
+            # Tworzymy instancję TrunkTemplate bez parametru color
+            trunk_template = TrunkTemplate(
                 interfaces=[
                     s.strip() for s in self.current_form.interfaces_input.text().split(",") if s.strip()
                 ],
@@ -112,7 +127,6 @@ class NewTemplateArea(QtWidgets.QWidget):
                 ],
                 native_vlan=self.current_form.native_vlan_input.value(),
                 description=self.current_form.description_input.text() or None,
-                color=self.current_form.color_picker.get_value(),  # Get color from picker
                 pruning_enabled=self.current_form.pruning_checkbox.isChecked(),
                 spanning_tree_guard_root=self.current_form.stp_guard_checkbox.isChecked(),
                 encapsulation=self.current_form.encapsulation_combo.currentText(),
@@ -123,5 +137,11 @@ class NewTemplateArea(QtWidgets.QWidget):
                 nonegotiate=self.current_form.nonegotiate_checkbox.isChecked(),
                 spanning_tree_portfast=self.current_form.portfast_checkbox.isChecked(),
             )
+
+            # Jeśli TrunkTemplate ma atrybut color, ustawiamy go po utworzeniu instancji
+            if hasattr(trunk_template, 'color') and hasattr(self.current_form, 'color_picker'):
+                setattr(trunk_template, 'color', self.current_form.color_picker.get_value())
+
+            return trunk_template
 
         return None

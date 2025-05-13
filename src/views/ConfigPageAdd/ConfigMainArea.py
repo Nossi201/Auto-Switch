@@ -306,13 +306,17 @@ class ConfigMainArea(QtWidgets.QWidget):
             switch = self.custom_templates.get("device")
             if isinstance(switch, SwitchTemplate):
                 vlan_id = instance.vlan_id
-                if vlan_id in switch.vlan_list:
+                # Używamy property vlan_list, które zwraca listę int'ów
+                vlan_list = switch.vlan_list
+                if vlan_id in vlan_list:
                     QtWidgets.QMessageBox.warning(
                         self, "Błąd",
                         f"Nie można utworzyć AccessTemplate: VLAN {vlan_id} już istnieje."
                     )
                     return
-                switch.vlan_list.append(vlan_id)
+                # Dodajemy nowy VLAN do SwitchTemplate
+                from src.models.templates.SwitchTemplate import VLAN
+                switch.vlans.append(VLAN(id=vlan_id, name=instance.description or f"VLAN{vlan_id}"))
                 print(f"[DEBUG] Added VLAN {vlan_id} to SwitchTemplate")
 
         # --- Save template ----------------------------------------- #

@@ -8,7 +8,7 @@ Added in 2025-05:
 """
 from PySide6 import QtWidgets, QtGui
 
-from src.ui.color_picker import ColorPicker
+from src.widgets.ColorPicker import ColorPicker
 
 
 class TrunkTemplateForm(QtWidgets.QWidget):

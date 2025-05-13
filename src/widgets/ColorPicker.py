@@ -1,4 +1,4 @@
-# 'src/ui/color_picker.py'
+# 'src/widget/color_picker.py'
 """
 Color picker component for the user interface.
 Provides a simple color selection dropdown for templates.
