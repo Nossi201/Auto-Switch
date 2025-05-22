@@ -161,10 +161,3 @@ Projekt jest aktywnie rozwijany. Aktualne funkcjonalności obejmują:
 - 🔄 Eksport do plików (w trakcie)
 - 🔄 Import istniejących konfiguracji (planowane)
 
-## Licencja
-
-[Informacje o licencji do uzupełnienia]
-
-## Kontakt
-
-[Informacje kontaktowe do uzupełnienia]
