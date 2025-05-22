@@ -23,6 +23,7 @@ class MainWindow(QMainWindow):
 
         # Selected device information – filled by StartPage → Next
         self.selected_device = None  # will hold a dict with model data
+        self.previous_device_type = None  # Track previous device type to detect changes
 
         # Cache of page instances to avoid recreation cost
         self._pages: dict[type, object] = {}
@@ -40,9 +41,30 @@ class MainWindow(QMainWindow):
     def goto_sc(self) -> None:
         """Switch UI to the configuration page (ConfigPage)."""
         if ConfigPage is not None:
+            # Check if device type changed since last configuration
+            current_device_type = self._get_current_device_type()
+            if self.previous_device_type != current_device_type:
+                # Remove cached ConfigPage if device type changed
+                if ConfigPage in self._pages:
+                    del self._pages[ConfigPage]
+                # Store new device type
+                self.previous_device_type = current_device_type
+
             self._switch_to(ConfigPage)
 
     # ---------------------------- internals --------------------------- #
+
+    def _get_current_device_type(self) -> str:
+        """Get the current device type + layer combination as a unique identifier."""
+        if not self.selected_device:
+            return "unknown"
+
+        device_type = self.selected_device.get("device_type", "unknown")
+        if device_type == "switch":
+            # Include the switch layer in the type for differentiation
+            switch_layer = self.selected_device.get("switch_layer", "L2")
+            return f"{device_type}_{switch_layer}"
+        return device_type
 
     def _get_or_create(self, page_cls):
         """Return existing instance of *page_cls* or construct it."""

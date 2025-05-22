@@ -25,12 +25,13 @@ from src.models.InterfaceAssignmentManager import InterfaceAssignmentManager
 
 from src.forms.AccessTemplateForm import AccessTemplateForm
 from src.forms.RouterTemplateForm import RouterTemplateForm
-from src.forms.SwitchTemplateForm import SwitchTemplateForm
+from src.forms.SwitchL2TemplateForm import SwitchL2TemplateForm
 from src.forms.TrunkTemplateForm import TrunkTemplateForm
 
 from src.models.templates.AccessTemplate import AccessTemplate
 from src.models.templates.RouterTemplate import RouterTemplate
-from src.models.templates.SwitchTemplate import SwitchTemplate
+from src.models.templates.SwitchL2Template import SwitchL2Template
+from src.models.templates.SwitchL3Template import SwitchL3Template
 from src.models.templates.TrunkTemplate import TrunkTemplate
 
 from src.utils.color_utils import get_contrasting_text_color
@@ -71,12 +72,21 @@ class ConfigMainArea(QtWidgets.QWidget):
     def _init_default_templates(self) -> None:
         """Initialize default templates if needed."""
         dev_type = self._device_info.get("device_type", "router").lower()
+        switch_layer = self._device_info.get("switch_layer", "L2")  # Nowa linia
 
         # Initialize device template
         if "device" not in self.custom_templates:
-            self.custom_templates["device"] = (
-                SwitchTemplate(hostname="Switch") if dev_type == "switch" else RouterTemplate(hostname="Router")
-            )
+            # Sprawdź typ przełącznika (L2 vs L3)
+            if dev_type == "switch":
+                if switch_layer == "L3":
+                    # Utworzenie instancji SwitchL3Template dla przełączników L3
+                    from src.models.templates.SwitchL3Template import SwitchL3Template
+                    self.custom_templates["device"] = SwitchL3Template(hostname="Switch")
+                else:
+                    # Standardowa instancja SwitchTemplate dla przełączników L2
+                    self.custom_templates["device"] = SwitchL2Template(hostname="Switch")
+            else:
+                self.custom_templates["device"] = RouterTemplate(hostname="Router")
 
         # Initialize VLAN 1 template for switches with default color
         if dev_type == "switch" and "vlan" not in self.custom_templates:
@@ -220,7 +230,7 @@ class ConfigMainArea(QtWidgets.QWidget):
         # --- keep VLAN list coherent on the device template -------- #
         if isinstance(instance, AccessTemplate):
             switch = self.custom_templates.get("device")
-            if isinstance(switch, SwitchTemplate):
+            if isinstance(switch, SwitchL2Template):
                 # add the VLAN only if it is not yet on the list
                 if instance.vlan_id not in switch.vlan_list:
                     switch.vlan_list.append(instance.vlan_id)
@@ -238,7 +248,7 @@ class ConfigMainArea(QtWidgets.QWidget):
         # --- generate CLI if supported ----------------------------- #
         if hasattr(instance, "generate_config"):
             # collect child templates when saving the switch
-            if isinstance(instance, SwitchTemplate):
+            if isinstance(instance, SwitchL2Template):
                 access_templates = [
                     t for k, t in self.custom_templates.items()
                     if k != "device" and isinstance(t, AccessTemplate)
@@ -304,7 +314,7 @@ class ConfigMainArea(QtWidgets.QWidget):
         # --- AccessTemplate VLAN duplication check ------------------ #
         if isinstance(instance, AccessTemplate):
             switch = self.custom_templates.get("device")
-            if isinstance(switch, SwitchTemplate):
+            if isinstance(switch, SwitchL2Template):
                 vlan_id = instance.vlan_id
                 # Używamy property vlan_list, które zwraca listę int'ów
                 vlan_list = switch.vlan_list
@@ -315,7 +325,7 @@ class ConfigMainArea(QtWidgets.QWidget):
                     )
                     return
                 # Dodajemy nowy VLAN do SwitchTemplate
-                from src.models.templates.SwitchTemplate import VLAN
+                from src.models.templates.SwitchL2Template import VLAN
                 switch.vlans.append(VLAN(id=vlan_id, name=instance.description or f"VLAN{vlan_id}"))
                 print(f"[DEBUG] Added VLAN {vlan_id} to SwitchTemplate")
 
@@ -348,6 +358,7 @@ class ConfigMainArea(QtWidgets.QWidget):
         print(f"[DEBUG] load_form_by_radio_choice({template_type})")
         self.current_template_type = template_type
         dev_type = self._device_info.get("device_type", "router").lower()
+        switch_layer = self._device_info.get("switch_layer", "L2")  # Nowa linia
 
         # interfaces assigned to this template
         assigned_ifaces = self.interface_manager.get_interfaces_for_template(template_type)
@@ -359,10 +370,27 @@ class ConfigMainArea(QtWidgets.QWidget):
         if template_type == "device":
             instance = self.custom_templates.get("device")
             if instance is None:
-                instance = SwitchTemplate(hostname="Switch") if dev_type == "switch" else RouterTemplate(
-                    hostname="Router")
+                # Wybierz odpowiednią klasę w zależności od typu urządzenia i warstwy
+                if dev_type == "switch":
+                    if switch_layer == "L3":
+                        from src.models.templates.SwitchL3Template import SwitchL3Template
+                        instance = SwitchL3Template(hostname="Switch")
+                    else:
+                        instance = SwitchL2Template(hostname="Switch")
+                else:
+                    instance = RouterTemplate(hostname="Router")
                 self.custom_templates["device"] = instance
-            form_cls = SwitchTemplateForm if dev_type == "switch" else RouterTemplateForm
+
+            # Wybierz odpowiednią klasę formularza
+            if dev_type == "switch":
+                if switch_layer == "L3" and hasattr(instance, "ip_routing"):
+                    # Użyj formularza L3 jeśli typ urządzenia to przełącznik L3
+                    from src.forms.SwitchL3TemplateForm import SwitchL3TemplateForm
+                    form_cls = SwitchL3TemplateForm
+                else:
+                    form_cls = SwitchL2TemplateForm
+            else:
+                form_cls = RouterTemplateForm
 
         elif template_type == "vlan":
             instance = self.custom_templates.get("vlan")

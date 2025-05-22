@@ -1,4 +1,4 @@
-# src/forms/SwitchTemplateForm.py
+# src/forms/SwitchL2TemplateForm.py
 """Enhanced PySide6 form for SwitchTemplate with comprehensive configuration options.
 
 The form now includes eight tabs for organizing switch configuration options:
@@ -14,7 +14,7 @@ The form now includes eight tabs for organizing switch configuration options:
 from PySide6 import QtWidgets
 
 
-class SwitchTemplateForm(QtWidgets.QWidget):
+class SwitchL2TemplateForm(QtWidgets.QWidget):
     """Comprehensive form for configuring all aspects of a Cisco switch."""
 
     def __init__(self, parent=None, instance=None):

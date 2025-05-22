@@ -1,4 +1,4 @@
-# src/models/templates/SwitchTemplate.py
+# src/models/templates/SwitchL2Template.py
 """Comprehensive Cisco‐switch template class with complete L2 feature support.
 
 This class supports eight configuration categories that match the UI tabs:
@@ -86,7 +86,7 @@ class MSTPInstance:
 
 
 @dataclass
-class SwitchTemplate:
+class SwitchL2Template:
     """Complete device-level settings for a Cisco switch."""
 
     # ---------------------------- 1. Basic Settings ---------------------------- #

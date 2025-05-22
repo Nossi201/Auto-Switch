@@ -9,7 +9,7 @@ Updated in 2025-05 to handle new color field for templates and proper enum handl
 from src.models.templates.AccessTemplate import AccessTemplate, PowerInlineMode, ViolationAction, QoSTrustState
 from src.models.templates.TrunkTemplate import TrunkTemplate, EncapsulationType, DTPMode
 from src.models.templates.RouterTemplate import RouterTemplate
-from src.models.templates.SwitchTemplate import SwitchTemplate, SpanningTreeMode, VTPMode
+from src.models.templates.SwitchL2Template import   SwitchL2Template, SpanningTreeMode, VTPMode
 
 
 def _bool(form, attr):
@@ -199,7 +199,7 @@ def build_template_instance(form):
                         vlan_id = int(vlan_id_item.text())
                         vlan_name = vlan_name_item.text() if vlan_name_item else f"VLAN{vlan_id}"
                         # Tworzymy obiekt VLAN zamiast słownika
-                        from src.models.templates.SwitchTemplate import VLAN
+                        from src.models.templates.SwitchL2Template import VLAN
                         vlans.append(VLAN(id=vlan_id, name=vlan_name))
                     except ValueError:
                         pass
@@ -220,7 +220,7 @@ def build_template_instance(form):
             except ValueError:
                 pass  # Stick with default if invalid
 
-        return SwitchTemplate(
+        return SwitchL2Template(
             hostname=form.hostname_input.text() or "Switch",
             # Use 'vlans' list with proper VLAN objects
             vlans=vlans,
@@ -232,7 +232,7 @@ def build_template_instance(form):
             vtp_domain=form.vtp_domain_input.text() if hasattr(form, "vtp_domain_input") else None,
         )
 
-    # --------------------------- SWITCH --------------------------- #
+    # --------------------------- SWITCH L2 --------------------------- #
     if hasattr(form, "hostname_input") and hasattr(form, "manager_vlan_id_combo"):
         # Extract VLAN IDs from the VLAN table if it exists
         vlans = []
@@ -265,7 +265,7 @@ def build_template_instance(form):
             except ValueError:
                 pass  # Stick with default if invalid
 
-        return SwitchTemplate(
+        return SwitchL2Template(
             hostname=form.hostname_input.text() or "Switch",
             # Use 'vlans' list with proper format
             vlans=vlans,
@@ -276,5 +276,262 @@ def build_template_instance(form):
             vtp_mode=vtp_mode,
             vtp_domain=form.vtp_domain_input.text() if hasattr(form, "vtp_domain_input") else None,
         )
+    # --------------------------- SWITCH L3 --------------------------- #
+    if hasattr(form, "hostname_input") and hasattr(form, "routing_enabled_checkbox"):
+        # Sprawdź, czy mamy do czynienia z formularzem SwitchL3TemplateForm
+        if hasattr(form, "svi_table") and hasattr(form, "create_switch_l3_template"):
+            # Użyj metody pomocniczej z formularza, która zbiera wszystkie dane
+            return form.create_switch_l3_template()
 
+        # Alternatywnie, możemy sami zbudować instancję z danych formularza
+        from src.models.templates.SwitchL3Template import SwitchL3Template, SwitchVirtualInterface, StaticRoute, \
+            ACLEntry
+
+        # Pobieranie danych z formularza
+        hostname = form.hostname_input.text() or "Switch"
+
+        # Pobieranie VLAN-ów z tabeli VLAN
+        vlans = []
+        if hasattr(form, "vlan_table"):
+            from src.models.templates.SwitchL3Template  import VLAN
+            for row in range(form.vlan_table.rowCount()):
+                vlan_id_item = form.vlan_table.item(row, 0)
+                vlan_name_item = form.vlan_table.item(row, 1)
+
+                if vlan_id_item:
+                    try:
+                        vlan_id = int(vlan_id_item.text())
+                        vlan_name = vlan_name_item.text() if vlan_name_item else f"VLAN{vlan_id}"
+                        vlans.append(VLAN(id=vlan_id, name=vlan_name))
+                    except ValueError:
+                        pass
+
+        # Pobieranie interfejsów SVI z tabeli
+        svi_interfaces = []
+        if hasattr(form, "svi_table"):
+            for row in range(form.svi_table.rowCount()):
+                vlan_id = form.svi_table.cellWidget(row, 0).value()
+                ip_address = form.svi_table.cellWidget(row, 1).text()
+                subnet_mask = form.svi_table.cellWidget(row, 2).text()
+                description = form.svi_table.cellWidget(row, 3).text()
+
+                if vlan_id and ip_address and subnet_mask:
+                    svi = SwitchVirtualInterface(
+                        vlan_id=vlan_id,
+                        ip_address=ip_address,
+                        subnet_mask=subnet_mask,
+                        description=description or None
+                    )
+                    svi_interfaces.append(svi)
+
+        # Pobieranie tras statycznych z tabeli
+        static_routes = []
+        if hasattr(form, "static_routes_table"):
+            for row in range(form.static_routes_table.rowCount()):
+                prefix = form.static_routes_table.cellWidget(row, 0).text()
+                mask = form.static_routes_table.cellWidget(row, 1).text()
+                next_hop = form.static_routes_table.cellWidget(row, 2).text()
+                distance = form.static_routes_table.cellWidget(row, 3).value()
+
+                if prefix and mask and next_hop:
+                    route = StaticRoute(
+                        prefix=prefix,
+                        mask=mask,
+                        next_hop=next_hop,
+                        distance=distance
+                    )
+                    static_routes.append(route)
+
+        # Pobieranie sieci OSPF z tabeli
+        ospf_networks = []
+        if hasattr(form, "ospf_networks_table") and hasattr(form,
+                                                            "ospf_enabled_checkbox") and form.ospf_enabled_checkbox.isChecked():
+            for row in range(form.ospf_networks_table.rowCount()):
+                network = form.ospf_networks_table.cellWidget(row, 0).text()
+                wildcard = form.ospf_networks_table.cellWidget(row, 1).text()
+                area = form.ospf_networks_table.cellWidget(row, 2).text()
+
+                if network and wildcard and area:
+                    ospf_networks.append((network, wildcard, area))
+
+        # Pobieranie sieci EIGRP z tabeli
+        eigrp_networks = []
+        eigrp_as = None
+        if hasattr(form, "eigrp_networks_table") and hasattr(form,
+                                                             "eigrp_enabled_checkbox") and form.eigrp_enabled_checkbox.isChecked():
+            eigrp_as = form.eigrp_as_input.value() if hasattr(form, "eigrp_as_input") else None
+
+            for row in range(form.eigrp_networks_table.rowCount()):
+                network = form.eigrp_networks_table.cellWidget(row, 0).text()
+                wildcard = form.eigrp_networks_table.cellWidget(row, 1).text()
+
+                if network and wildcard:
+                    eigrp_networks.append((network, wildcard))
+
+        # Pobieranie wpisów ACL z tabeli
+        acl_entries = []
+        if hasattr(form, "acl_table"):
+            for row in range(form.acl_table.rowCount()):
+                name = form.acl_table.cellWidget(row, 0).text()
+                sequence = form.acl_table.cellWidget(row, 1).value()
+                action = form.acl_table.cellWidget(row, 2).currentText()
+                protocol = form.acl_table.cellWidget(row, 3).currentText()
+                source = form.acl_table.cellWidget(row, 4).text()
+                destination = form.acl_table.cellWidget(row, 5).text()
+                port_operator = form.acl_table.cellWidget(row, 6).currentText()
+
+                if name and action and protocol and source:
+                    entry = ACLEntry(
+                        name=name,
+                        sequence=sequence,
+                        action=action,
+                        protocol=protocol,
+                        source=source,
+                        destination=destination,
+                        port_operator=port_operator or None
+                    )
+                    acl_entries.append(entry)
+
+        # Pobieranie konfiguracji NAT
+        nat_inside_interfaces = []
+        nat_outside_interfaces = []
+        nat_pool = {}
+        nat_acl_to_pool = {}
+
+        if hasattr(form, "nat_inside_interfaces_input"):
+            nat_inside_interfaces = [s.strip() for s in form.nat_inside_interfaces_input.text().split(",") if s.strip()]
+
+        if hasattr(form, "nat_outside_interfaces_input"):
+            nat_outside_interfaces = [s.strip() for s in form.nat_outside_interfaces_input.text().split(",") if
+                                      s.strip()]
+
+        if hasattr(form, "nat_pool_table"):
+            for row in range(form.nat_pool_table.rowCount()):
+                name = form.nat_pool_table.cellWidget(row, 0).text()
+                start_ip = form.nat_pool_table.cellWidget(row, 1).text()
+                end_ip = form.nat_pool_table.cellWidget(row, 2).text()
+                prefix = form.nat_pool_table.cellWidget(row, 3).value()
+
+                if name and start_ip and end_ip:
+                    # Format: "start_ip end_ip prefix-length prefix"
+                    config = f"{start_ip} {end_ip} prefix-length {prefix}"
+                    nat_pool[name] = config
+
+        if hasattr(form, "nat_acl_pool_table"):
+            for row in range(form.nat_acl_pool_table.rowCount()):
+                acl_name = form.nat_acl_pool_table.cellWidget(row, 0).text()
+                pool_name = form.nat_acl_pool_table.cellWidget(row, 1).text()
+
+                if acl_name and pool_name:
+                    nat_acl_to_pool[acl_name] = pool_name
+
+        # Pobieranie konfiguracji DHCP
+        dhcp_excluded_addresses = []
+        dhcp_pools = {}
+
+        if hasattr(form, "dhcp_excluded_input"):
+            dhcp_excluded_addresses = [s.strip() for s in form.dhcp_excluded_input.text().split() if s.strip()]
+
+        if hasattr(form, "dhcp_pool_table"):
+            for row in range(form.dhcp_pool_table.rowCount()):
+                name = form.dhcp_pool_table.cellWidget(row, 0).text()
+                network = form.dhcp_pool_table.cellWidget(row, 1).text()
+                default_router = form.dhcp_pool_table.cellWidget(row, 2).text()
+                dns = form.dhcp_pool_table.cellWidget(row, 3).text()
+
+                if name and network:
+                    config = {}
+                    if network:
+                        config["network"] = network
+                    if default_router:
+                        config["default-router"] = default_router
+                    if dns:
+                        config["dns-server"] = dns
+
+                    dhcp_pools[name] = config
+
+        # Pobieranie konfiguracji HSRP
+        hsrp_groups = {}
+
+        if hasattr(form, "hsrp_table"):
+            for row in range(form.hsrp_table.rowCount()):
+                interface = form.hsrp_table.cellWidget(row, 0).text()
+                group_id = str(form.hsrp_table.cellWidget(row, 1).value())
+                ip = form.hsrp_table.cellWidget(row, 2).text()
+                priority = form.hsrp_table.cellWidget(row, 3).value()
+
+                if interface and group_id and ip:
+                    if interface not in hsrp_groups:
+                        hsrp_groups[interface] = {}
+
+                    hsrp_groups[interface][group_id] = {
+                        "ip": ip,
+                        "priority": str(priority)
+                    }
+
+        # Pobieranie konfiguracji VRF
+        vrf_definitions = {}
+
+        if hasattr(form, "vrf_table"):
+            for row in range(form.vrf_table.rowCount()):
+                name = form.vrf_table.cellWidget(row, 0).text()
+                rd = form.vrf_table.cellWidget(row, 1).text()
+
+                if name:
+                    config = {}
+                    if rd:
+                        config["rd"] = rd
+                        config["address-family ipv4"] = ""  # Domyślnie włączona
+
+                    vrf_definitions[name] = config
+
+        # Odczytanie pozostałych ustawień z formularza przełącznika L2
+        manager_vlan_id = int(form.manager_vlan_id_combo.currentText()) if hasattr(form, "manager_vlan_id_combo") else 1
+        manager_ip = form.manager_ip_input.text().strip() if hasattr(form,
+                                                                     "manager_ip_input") else "192.168.1.1 255.255.255.0"
+        default_gateway = form.default_gateway_input.text().strip() if hasattr(form,
+                                                                               "default_gateway_input") else "192.168.1.254"
+
+        # Tworzenie instancji SwitchL3Template
+        return SwitchL3Template(
+            hostname=hostname,
+            vlans=vlans,
+            manager_vlan_id=manager_vlan_id,
+            manager_ip=manager_ip,
+            default_gateway=default_gateway,
+
+            # Funkcje routingu L3
+            ip_routing=form.routing_enabled_checkbox.isChecked() if hasattr(form, "routing_enabled_checkbox") else True,
+            ipv6_routing=form.ipv6_routing_checkbox.isChecked() if hasattr(form, "ipv6_routing_checkbox") else False,
+            svi_interfaces=svi_interfaces,
+            static_routes=static_routes,
+
+            # OSPF
+            ospf_process_id=form.ospf_process_id_input.value() if hasattr(form, "ospf_process_id_input") else 1,
+            ospf_router_id=form.ospf_router_id_input.text() if hasattr(form, "ospf_router_id_input") else None,
+            ospf_networks=ospf_networks,
+
+            # EIGRP
+            eigrp_as=eigrp_as,
+            eigrp_networks=eigrp_networks,
+
+            # ACL
+            acl_entries=acl_entries,
+
+            # NAT
+            nat_inside_interfaces=nat_inside_interfaces,
+            nat_outside_interfaces=nat_outside_interfaces,
+            nat_pool=nat_pool,
+            nat_acl_to_pool=nat_acl_to_pool,
+
+            # DHCP
+            dhcp_excluded_addresses=dhcp_excluded_addresses,
+            dhcp_pools=dhcp_pools,
+
+            # HSRP
+            hsrp_groups=hsrp_groups,
+
+            # VRF
+            vrf_definitions=vrf_definitions
+        )
     return None
